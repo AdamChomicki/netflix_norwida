@@ -176,13 +176,13 @@ smd['keywords'] = smd['keywords'].apply(literal_eval) # nie wiem co robi
 smd['cast_size'] = smd['cast'].apply(lambda x: len(x)) # nie wiem co robi
 smd['crew_size'] = smd['crew'].apply(lambda x: len(x)) # nie wiem co robi
 
-def otrzymanie_rezysera(x): #
+def otrzymanie_scenarzysty(x): #
     for i in x:
-        if i['job'] == 'Director':
+        if i['job'] == 'Screenplay':
             return i['name']
     return np.nan
 
-smd['director'] = smd['crew'].apply(otrzymanie_rezysera) # 
+smd['screenplay'] = smd['crew'].apply(otrzymanie_scenarzysty) # 
 smd['cast'] = smd['cast'].apply(lambda x: [i['name'] for i in x] if isinstance(x, list) else []) #
 smd['cast'] = smd['cast'].apply(lambda x: x[:3] if len(x) >=3 else x) #
 smd['keywords'] = smd['keywords'].apply(lambda x: [i['name'] for i in x] if isinstance(x, list) else []) #
@@ -193,8 +193,8 @@ smd['cast'] = smd['cast'].apply(lambda x: [str.lower(i.replace(" ", "")) for i i
 # Usuń spacje i konwertuj na małe litery ze wszystkich naszych funkcji. W ten sposób nasz silnik nie pomyli Johnny'ego Deppa i Johnny'ego Galeckiego.
 # Wspomnij reżysera 3 razy, aby nadać mu większą wagę w stosunku do całej obsady.
 
-smd['director'] = smd['director'].astype('str').apply(lambda x: str.lower(x.replace(" ", ""))) #
-smd['director'] = smd['director'].apply(lambda x: [x,x, x]) #
+smd['screenplay'] = smd['screenplay'].astype('str').apply(lambda x: str.lower(x.replace(" ", ""))) #
+smd['screenplay'] = smd['screenplay'].apply(lambda x: [x,x, x]) #
 
 # Słowa kluczowe
 # Wykonamy niewielką ilość wstępnego przetwarzania naszych słów kluczowych przed ich użyciem. Pierwszym krokiem jest obliczenie częstości występowania każdego słowa kluczowego, które pojawia się w zbiorze danych.
@@ -223,7 +223,7 @@ def filtr_slow_kluczowych(x): #
 smd['keywords'] = smd['keywords'].apply(filtr_slow_kluczowych) #
 smd['keywords'] = smd['keywords'].apply(lambda x: [stemmer.stem(i) for i in x]) #
 smd['keywords'] = smd['keywords'].apply(lambda x: [str.lower(i.replace(" ", "")) for i in x]) # usuwane są spacje
-smd['soup'] = smd['keywords'] + smd['cast'] + smd['director'] + smd['genres'] # 
+smd['soup'] = smd['keywords'] + smd['cast'] + smd['screenplay'] + smd['genres'] # 
 smd['soup'] = smd['soup'].apply(lambda x: ' '.join(x)) #
 
 count = CountVectorizer(analyzer='word',ngram_range=(1, 2),min_df=0, stop_words='english') # utworzenie tabeli 'count'. Można dodac 1,2,3.
