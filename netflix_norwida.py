@@ -1,20 +1,13 @@
-%matplotlib inline
 import pandas as pd # biblioteka do analizy danych
 import numpy as np # biblioteka do obliczeń matematycznych
-import matplotlib.pyplot as plt # biblioteka do tworzenia wykresów
-import seaborn as sns # biblioteka do tworzenia wykresów
-from scipy import stats # pakietem zawierającym implementacje szeregu procedur numerycznych, takich jak całkowanie i różniczkowanie, algorytmy rozwiązywania równań, etc.
 from ast import literal_eval
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer # sxikit-learn biblioteka uczenia maszynowego. Zawiera m.in. algorytmy klasyfikacji, regresji, klastrowania.
 from sklearn.metrics.pairwise import linear_kernel, cosine_similarity
 from nltk.stem.snowball import SnowballStemmer # NLTK – zestaw bibliotek i programów do symbolicznego i statystycznego przetwarzania języka naturalnego.
-from nltk.stem.wordnet import WordNetLemmatizer
-from nltk.corpus import wordnet
 from surprise import Reader
 from surprise import SVD # Rozkład według wartości osobliwych
 from surprise import Dataset
 from surprise.model_selection import cross_validate
-# from surprise import evaluate
 
 import warnings; warnings.simplefilter('ignore') # czego dotyczy to ostrzeżenie?
 
@@ -51,7 +44,6 @@ def ocena_wazona(x):  # ocena wazona
     l_liczba_glosow = x['vote_count']
     s_srednia_glosow = x['vote_average']
     return (l_liczba_glosow / (l_liczba_glosow + liczba_glosow_kwantyl) * s_srednia_glosow) + (liczba_glosow_kwantyl / (liczba_glosow_kwantyl + l_liczba_glosow) * srednia_glosow_mean)
-
 
 zakwalifikowany['wr'] = zakwalifikowany.apply(ocena_wazona,axis=1)  # dodanie oceny ważonej do kolumny 'qualified'. Teraz ma (2274, 7)
 
@@ -369,7 +361,7 @@ mapa_indeksow = mapa_id.set_index('id') # utworzenie nowej tabeli o naziwe 'indi
 def hybryda(userId, title): # wskazniki tytułow póxniej bierze id filmów 
     idx = indeksy[title] # movie id = id filmow, druga tab. to id rekomendacji.
     tmdbId = mapa_id.loc[title]['id']
-    #print(idx)
+    print(idx)
     movie_id = mapa_id.loc[title]['movieId']
     
     wynik_cosunisowy = list(enumerate(cosine_sim[int(idx)])) # nie ma znaczenia większego
@@ -392,4 +384,3 @@ hybryda(500, 'Avatar') # wygenerowanie danych w kodzie
 # jak porównywać modele, jak je oceniają. Do klasteryzacji, do rekomendacji <--.
 # Dowiedzieć się tego.
 # Częsć userow moze być testerami naszej aplikacji.
-
