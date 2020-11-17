@@ -269,30 +269,30 @@ uzyskane_rekomendacje('Mean Girls').head(10) # generuje dane w konsoli.
 # obliczymy ważoną ocenę każdego filmu, korzystając ze wzoru IMDB, tak jak to zrobiliśmy 
 # w sekcji Prosty polecający.
 
-def ulepszone_rekomendacje(title): # O TYM MOWILISMY # może z tego zrezygnować. # możemy zostać consine similitary
-    idx = indeksy[title]
-    wynik_cosunisowy = list(enumerate(cosine_sim[idx]))
-    wynik_cosunisowy = sorted(wynik_cosunisowy, key=lambda x: x[1], reverse=True)
-    wynik_cosunisowy = wynik_cosunisowy[1:26]
-    indeksy_filmowe = [i[0] for i in wynik_cosunisowy]
-    
-    filmy = smd.iloc[indeksy_filmowe][['title', 'vote_count', 'vote_average', 'year']]
-    liczba_glosow = filmy[filmy['vote_count'].notnull()]['vote_count'].astype('int')
-    srednia_glosow = filmy[filmy['vote_average'].notnull()]['vote_average'].astype('int')
-    srednia_glosow_mean = srednia_glosow.mean()
-    liczba_glosow_kwantyl = liczba_glosow.quantile(0.60)
-    zakwalifikowany = filmy[(filmy['vote_count'] >= liczba_glosow_kwantyl) & (filmy['vote_count'].notnull()) & (filmy['vote_average'].notnull())]
-    zakwalifikowany['vote_count'] = zakwalifikowany['vote_count'].astype('int')
-    zakwalifikowany['vote_average'] = zakwalifikowany['vote_average'].astype('int')
-    zakwalifikowany['wr'] = zakwalifikowany.apply(ocena_wazona, axis=1)
-    zakwalifikowany = zakwalifikowany.sort_values('wr', ascending=False).head(10)
-    return zakwalifikowany
+#def ulepszone_rekomendacje(title): # O TYM MOWILISMY # może z tego zrezygnować. # możemy zostać consine similitary
+#    idx = indeksy[title]
+#    wynik_cosunisowy = list(enumerate(cosine_sim[idx]))
+#    wynik_cosunisowy = sorted(wynik_cosunisowy, key=lambda x: x[1], reverse=True)
+#    wynik_cosunisowy = wynik_cosunisowy[1:26]
+#    indeksy_filmowe = [i[0] for i in wynik_cosunisowy]
+#    
+#    filmy = smd.iloc[indeksy_filmowe][['title', 'vote_count', 'vote_average', 'year']]
+#    liczba_glosow = filmy[filmy['vote_count'].notnull()]['vote_count'].astype('int')
+#    srednia_glosow = filmy[filmy['vote_average'].notnull()]['vote_average'].astype('int')
+#    srednia_glosow_mean = srednia_glosow.mean()
+#    liczba_glosow_kwantyl = liczba_glosow.quantile(0.60)
+#    zakwalifikowany = filmy[(filmy['vote_count'] >= liczba_glosow_kwantyl) & (filmy['vote_count'].notnull()) & (filmy['vote_average'].notnull())]
+#    zakwalifikowany['vote_count'] = zakwalifikowany['vote_count'].astype('int')
+#    zakwalifikowany['vote_average'] = zakwalifikowany['vote_average'].astype('int')
+#    zakwalifikowany['wr'] = zakwalifikowany.apply(ocena_wazona, axis=1)
+#    zakwalifikowany = zakwalifikowany.sort_values('wr', ascending=False).head(10)
+#    return zakwalifikowany
 
-ulepszone_rekomendacje('The Dark Knight') # wyswietlenie w konsoli danych o tytułach filmów.
+#ulepszone_rekomendacje('The Dark Knight') # wyswietlenie w konsoli danych o tytułach filmów.
 
 # Pozwólcie, że poznam także rekomendacje dotyczące Wrednych dziewczyn, ulubionego filmu mojej dziewczyny.
 
-ulepszone_rekomendacje('Mean Girls') # wyswietlenie w konsoli danych o tytułach filmów.
+#ulepszone_rekomendacje('Mean Girls') # wyswietlenie w konsoli danych o tytułach filmów.
 
 # Niestety Batman i Robin nie znikają z naszej listy rekomendacji. Wynika to prawdopodobnie z faktu, 
 # że ma ocenę 4, która jest tylko nieco poniżej średniej w TMDB. Z pewnością nie zasługuje na 4, 
