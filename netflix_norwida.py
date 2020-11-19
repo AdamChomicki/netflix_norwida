@@ -1,70 +1,102 @@
-import pandas as pd # biblioteka do analizy danych
-import numpy as np # biblioteka do obliczeń matematycznych
+import pandas as pd 
+# biblioteka do analizy danych
+import numpy as np 
+# biblioteka do obliczeń matematycznych
 from ast import literal_eval
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer # sxikit-learn biblioteka uczenia maszynowego. Zawiera m.in. algorytmy klasyfikacji, regresji, klastrowania.
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer 
+# sxikit-learn biblioteka uczenia maszynowego. 
+# Zawiera m.in. algorytmy klasyfikacji, regresji, klastrowania.
 from sklearn.metrics.pairwise import linear_kernel, cosine_similarity
-from nltk.stem.snowball import SnowballStemmer # NLTK – zestaw bibliotek i programów do symbolicznego i statystycznego przetwarzania języka naturalnego.
+from nltk.stem.snowball import SnowballStemmer 
+# NLTK – zestaw bibliotek i programów do symbolicznego i statystycznego przetwarzania języka naturalnego.
 from surprise import Reader
-from surprise import SVD # Rozkład według wartości osobliwych
+from surprise import SVD 
+# Rozkład według wartości osobliwych
 from surprise import Dataset
 from surprise.model_selection import cross_validate
 
-import warnings; warnings.simplefilter('ignore') # czego dotyczy to ostrzeżenie?
+import warnings; warnings.simplefilter('ignore') 
+# blokuje komunikaty ostrzegawcze o np. niektualnej wersji
 
-filmy_dane = pd.read_csv(r'C:\Users\Adam\Desktop\netflix_dane\filmy_dane.csv')  # wczytanie pliku .csv z danymi takimi jak tytuł, język, data produkcji. Rozmiar (45466, 24).
-filmy_dane.head()  # wyswietlenie 5 pierwszych wierszy
+filmy_dane = pd.read_csv(r'C:\Users\Adam\Desktop\netflix_dane\filmy_dane.csv')  
+# wczytanie pliku .csv z danymi takimi jak tytuł, język, data produkcji. Rozmiar (45466, 24).
+filmy_dane.head(3) 
+ # wyswietlenie 3 pierwszych wierszy
 
-filmy_dane['genres'] = filmy_dane['genres'].fillna('[]').apply(literal_eval).apply(lambda x: [i['name'] for i in x] if isinstance(x, list) else [])  # formuła oceny wazonej
+filmy_dane['genres'] = filmy_dane['genres'].fillna('[]').apply(literal_eval).apply(lambda x: [i['name'] for i in x] if isinstance(x, list) else [])  
+# formuła oceny wazonej. 
+# !!! muszę ją w wolnej chwili dokładnie zinterpretować
 
-# Następnym krokiem jest ustalenie odpowiedniej wartości m, czyli minimalnej liczby głosów wymaganych do umieszczenia
-# na wykresie. Jako wartość odcięcia użyjemy 95. percentyla. Innymi słowy, aby film znalazł się na listach przebojów,
-# musi mieć więcej głosów niż co najmniej 95% filmów na liście.
-# Zbuduję naszą ogólną listę Top 250 i zdefiniuję funkcję do tworzenia wykresów dla określonego gatunku.
+liczba_glosow = filmy_dane[filmy_dane['vote_count'].notnull()]['vote_count'].astype('int') 
+# do zmiennej liczba głosów, przypisujemy zbiór danych o filmie, nastepnie wyciągamy kolumne 'liczba głosów' 
+# oraz tylko te wartosci które nie są nulami i zmieniami typ danych na 'int'.
+# Dlatego nasza kolumna 'liczba_glosow' ma 45460 rekordów.
+# O 6 mniej niż nasz obiekt DataFrame 'filmy_dane'. 
+# !!! Do weryfikacji czy tak jest napewno.
 
-liczba_glosow = filmy_dane[filmy_dane['vote_count'].notnull()]['vote_count'].astype('int')  # wyciągnięcie kolumny 'vote_count' i przypisanie jej typu 'int' (45460, ).
-srednia_glosow = filmy_dane[filmy_dane['vote_average'].notnull()]['vote_average'].astype('int')  # wyciągnięcie kolumny 'vote_average' i przypisanie jej typu 'int' (45460, ).
-srednia_glosow_mean = srednia_glosow.mean()  #
-srednia_glosow_mean  # wyswietlenie sredniej oceny głosów w konsoli?
+srednia_glosow = filmy_dane[filmy_dane['vote_average'].notnull()]['vote_average'].astype('int')
+# dane o filmach przypisujemy do zmiennej 'srednia_glosow'.
+# Nastepnie wyciągamy kolumne 'srednia_glosow' oraz tylko te wartosci które nie są nulami i zmieniami typ danych na 'int'.
 
-liczba_glosow_kwantyl = liczba_glosow.quantile(0.85)  # wartosc odciecia 0.95 percentyla # ZMIANA TUTAJ NP. ## zmiana na z 0.95 na 0.85.
-liczba_glosow_kwantyl  # wygenerowanie liczby 434.0 w konsoli. Co to jest m?
+srednia_ze_sredniej_liczby_glosow = srednia_glosow.mean()
+# liczymy srednią, ze sredniej liczby głosów. Wynosi 5.24.
 
-filmy_dane['year'] = pd.to_datetime(filmy_dane['release_date'], errors='coerce').apply(lambda x: str(x).split('-')[0] if x != np.nan else np.nan)  # ?
+liczba_glosow_kwantyl = liczba_glosow.quantile(0.867)
+# ustawienie liczby głosów tak, (oddane głosy tmdb) aby film mogł sie znaleźć na liscie proponowanych pozycji.
+# Obecne ustawienie = min. 100 oddanych glosow.   
 
-zakwalifikowany = filmy_dane[(filmy_dane['vote_count'] >= liczba_glosow_kwantyl) & (filmy_dane['vote_count'].notnull()) & (filmy_dane['vote_average'].notnull())][['title', 'year', 'vote_count', 'vote_average', 'popularity', 'genres']]  # Wycięcie kolumn z nawioasu do nowej tabeli o nazwie 'qualified'.
-zakwalifikowany['vote_count'] = zakwalifikowany['vote_count'].astype('int')  # zmiana typu kolumny 'vote_count' na 'int'.
-zakwalifikowany['vote_average'] = zakwalifikowany['vote_average'].astype('int')  # zmiana typu kolumny 'vote_count' na 'int'.
-zakwalifikowany.shape  # pokazuje rozmiar tabeli 'qualified' w konsoli tj. (2274, 6)
+filmy_dane['year'] = pd.to_datetime(filmy_dane['release_date'], errors='coerce').apply(lambda x: str(x).split('-')[0] if x != np.nan else np.nan)
+# !!! muszę ją w wolnej chwili dokładnie zinterpretować
 
-# Dlatego, aby zakwalifikować się do listy przebojów, film musi mieć co najmniej 434 głosów na TMDB.
-# Widzimy również, że średnia ocena filmu na TMDB to 5,244 w skali 10. 2274 Filmy kwalifikują się do umieszczenia
-# na naszym wykresie.
+zakwalifikowany = filmy_dane[(filmy_dane['vote_count'] >= liczba_glosow_kwantyl) & (filmy_dane['vote_count'].notnull()) & (filmy_dane['vote_average'].notnull())][['title', 'year', 'vote_count', 'vote_average', 'popularity', 'genres']]  
+# do zmiennej 'zakwalifikowany' przypsiujemy dane o filmach. 
+# Złożenia: liczba glosow jest >= 100 (tyle wynosi zmienna liczba_glosow_kwantyl) i liczba głosów nie jest nulem i srednia glosów nie jest nullem.
+# Dodatkowo pracuje tylko na kolumnach: 'title', 'year', 'vote_count', 'vote_average', 'popularity', 'genres'.
+# Czyli mamy 6055 tytułow spełniających nasz warunek. 
+# Te filmy są przypsane do obiektu DataFrame o nazwie 'zakwalifikowany'. 
 
-def ocena_wazona(x):  # ocena wazona
+zakwalifikowany['vote_count'] = zakwalifikowany['vote_count'].astype('int')  
+# zmiana typu danych w kolumnie 'vote_count' z float64 na 'int'.
+
+zakwalifikowany['vote_average'] = zakwalifikowany['vote_average'].astype('int')  
+# zmiana typu danych w kolumnie 'vote_count' z float64 na 'int'.
+
+# Aby zakwalifikować się do listy filmow proponowanych, film musi mieć co najmniej 100 głosów na tmdb.
+# Widzimy również, że średnia ocena filmu na tmdb to 5,244 w skali od 0 do 10. 
+# 6055 filmów kwalifikują się do umieszczenia na naszym wykresie.
+
+def ocena_wazona(x):
     l_liczba_glosow = x['vote_count']
     s_srednia_glosow = x['vote_average']
-    return (l_liczba_glosow / (l_liczba_glosow + liczba_glosow_kwantyl) * s_srednia_glosow) + (liczba_glosow_kwantyl / (liczba_glosow_kwantyl + l_liczba_glosow) * srednia_glosow_mean)
+    return (l_liczba_glosow / (l_liczba_glosow + liczba_glosow_kwantyl) * s_srednia_glosow) + (liczba_glosow_kwantyl / (liczba_glosow_kwantyl + l_liczba_glosow) * srednia_ze_sredniej_liczby_glosow)
+# funkcja ocena_wazona 
+# !!! dzięki tej funkcji okreslamy wagę ocen dla poszczególnego filmu?   
+# !!! muszę ją w wolnej chwili dokładnie zinterpretować
 
-zakwalifikowany['wr'] = zakwalifikowany.apply(ocena_wazona,axis=1)  # dodanie oceny ważonej do kolumny 'qualified'. Teraz ma (2274, 7)
+zakwalifikowany['ocena_wazona'] = zakwalifikowany.apply(ocena_wazona,axis=1)  
+# dodanie kolumny 'ocena_wazona' do obiektu 'zakwalifikowany'. Obecny rozmiar to (6055, 7). Czyli o jedną kolumnę więcej niż poprzednio.
 
-zakwalifikowany = zakwalifikowany.sort_values('wr', ascending=False).head(500)  # ograniczenie w danych tabeli 'qualified' do 250. Teraz jest (250, 7).
+zakwalifikowany = zakwalifikowany.sort_values('ocena_wazona', ascending=False).head(500)  
+# Posortowanie danych wg. oceny_wazonej. Ograniczenie tytułów do 500.
+# 500 tytułów będzie branych pod uwage jako filmy proponowane. 
+# !!! Z tmdb są pobrani użytkownicy a z imdb są pobrane filmy? Muszę to sprawdzić.
 
-zakwalifikowany.head(15)  # wyswietlenie 15 wierszy w konsoli z tytułem i oceną ważoną.
+gatunek_filmu = filmy_dane.apply(lambda x: pd.Series(x['genres']), axis=1).stack().reset_index(level=1,drop=True)  
+# !!! muszę ją w wolnej chwili dokładnie zinterpretować
+# !!! po co wyciagamy wszytskie agtunki filmów? Rozmiar (91106, ). Aby później je z joinować z obiektem 'filmy_dane'?
 
-# Widzimy, że trzy filmy Christophera Nolana, Incepcja, Mroczny rycerz i Międzygwiezdny znajdują się na samym szczycie
-# naszej listy. Wykres wskazuje również na silne nastawienie użytkowników TMDB do poszczególnych gatunków i reżyserów.
-# Skonstruujmy teraz naszą funkcję, która buduje wykresy dla poszczególnych gatunków.
-# W tym celu użyjemy rozluźnienia naszych warunków domyślnych do 85. percentyla zamiast 95.
+gatunek_filmu.name = 'kategoria'
+# zmiany nazwy kolumny tabeli 'gatunek_filmu' z '0' na 'kategoria'
 
-gatunek_filmu = filmy_dane.apply(lambda x: pd.Series(x['genres']), axis=1).stack().reset_index(level=1,drop=True)  # pojawienie się tabeli 's' o rozmiarze (91106, ).
-gatunek_filmu.name = 'genre'  #
-gen_filmy_dane = filmy_dane.drop('genres', axis=1).join(gatunek_filmu)  # utworzenie tabeli 'gen_md' o roziarze (93548, 25).
+filmy_dane_bez_genres = filmy_dane.drop('genres', axis=1).join(gatunek_filmu) 
+# Obiekt DataFrame 'filmy_dane_bez_genres' już nie ma skomplikowanej kolumny 'genres'.
+# W zamian ma dodaną kolumnę 'kategoria'.
 
-def buduj_wykres(genre, percentile=0.80):  ## zmiana z 0.85 na 0.80
-    df = gen_filmy_dane[gen_filmy_dane['genre'] == genre]
+def buduj_wykres(kategoria, percentile=0.867):  ## zmiana z 0.85 na 0.80
+    df = filmy_dane_bez_genres[filmy_dane_bez_genres['belongs_to_collection'] == genre]
     liczba_glosow = df[df['vote_count'].notnull()]['vote_count'].astype('int')
     srednia_glosow = df[df['vote_average'].notnull()]['vote_average'].astype('int')
-    srednia_glosow_mean = srednia_glosow.mean()
+    srednia_ze_sredniej_liczby_glosow = srednia_glosow.mean()
     liczba_glosow_kwantyl = liczba_glosow.quantile(percentile)
 
     zakwalifikowany = df[(df['vote_count'] >= liczba_glosow_kwantyl) & (df['vote_count'].notnull()) & (df['vote_average'].notnull())][['title', 'year', 'vote_count', 'vote_average', 'popularity']]
@@ -223,7 +255,7 @@ def filtr_slow_kluczowych(x): #
 smd['keywords'] = smd['keywords'].apply(filtr_slow_kluczowych) #
 smd['keywords'] = smd['keywords'].apply(lambda x: [stemmer.stem(i) for i in x]) #
 smd['keywords'] = smd['keywords'].apply(lambda x: [str.lower(i.replace(" ", "")) for i in x]) # usuwane są spacje
-smd['soup'] = smd['keywords'] + smd['cast'] + smd['screenplay'] + smd['genres'] # 
+smd['soup'] = smd['keywords'] + smd['cast'] + smd['screenplay'] + smd['belongs_to_collection'] # 
 smd['soup'] = smd['soup'].apply(lambda x: ' '.join(x)) #
 
 count = CountVectorizer(analyzer='word',ngram_range=(1, 2),min_df=0, stop_words='english') # utworzenie tabeli 'count'. Można dodac 1,2,3.
@@ -350,7 +382,6 @@ def konwertuj_int(x): #
     except:
         return np.nan
     
-    
 mapa_id = pd.read_csv(r'C:/Users/Adam/Desktop/netflix_dane/dane_id_male.csv')[['movieId', 'tmdbId']] # zaciagniecie danych. Utworzenie nowej tabeli 'id_map' o rozm. (9125, 2).
 mapa_id['tmdbId'] = mapa_id['tmdbId'].apply(konwertuj_int) #
 mapa_id.columns = ['movieId', 'id'] #
@@ -366,13 +397,13 @@ def hybryda(userId, title): # wskazniki tytułow póxniej bierze id filmów
     
     wynik_cosunisowy = list(enumerate(cosine_sim[int(idx)])) # nie ma znaczenia większego
     wynik_cosunisowy = sorted(wynik_cosunisowy, key=lambda x: x[1], reverse=True) # jak wszytskie filmy są podobne do tego jednego. 
-    wynik_cosunisowy = wynik_cosunisowy[1:26] # tylko 25 obiecujących folmów pokazano. Wyprowadzić gdzie indziej ten parametrów.
+    wynik_cosunisowy = wynik_cosunisowy[1:10] # tylko 25 obiecujących folmów pokazano. Wyprowadzić gdzie indziej ten parametrów.
     indeksy_filmowe = [i[0] for i in wynik_cosunisowy] # później znajdujemy indkesy tych filmów.
     
     filmy = smd.iloc[indeksy_filmowe][['title', 'vote_count', 'vote_average', 'year', 'id']] # później patrzymy z którego roku, etc.
     filmy['est'] = filmy['id'].apply(lambda x: svd.predict(userId, mapa_indeksow.loc[x]['movieId']).est) # tu robimy predyckje. Wiesz kim jest nasz user, i powiedz jak spodobało się te 25 filmów.
     filmy = filmy.sort_values('est', ascending=False) # przerobienie funkjci aby wykorzystywała get_recommendaition
-    return filmy.head(10)
+    return filmy.head(5)
 
 hybryda(1, 'Avatar') # wygenerowanie danych w kodzie
 hybryda(500, 'Avatar') # wygenerowanie danych w kodzie
@@ -384,3 +415,14 @@ hybryda(500, 'Avatar') # wygenerowanie danych w kodzie
 # jak porównywać modele, jak je oceniają. Do klasteryzacji, do rekomendacji <--.
 # Dowiedzieć się tego.
 # Częsć userow moze być testerami naszej aplikacji.
+# zrobić exele z danymi (po 1 rekordzie) 
+# zrobić bazę danych w MS SQL z plików na których pracuje (dla jasnosci co z czyms ie łączy).
+# filmy_dane = filmy_dane.dropna(subset=['release_date'])
+# filmy_dane = filmy_dane[filmy_dane['release_date'].str.contains(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")]
+
+# Ustalenie minimalnej liczby głosów wymagajnej do umieszczanie filmu na liscie filmów proponowanych. 
+# Aby film znalazł się w ww. puli, musi mieć liczbę głosów większą niż 95% pozostałych filmów.
+# Tylko 5 % filmów będzie proponowanych. 
+
+# Skonstruujmy teraz naszą funkcję, która buduje wykresy dla poszczególnych gatunków.
+# W tym celu użyjemy rozluźnienia naszych warunków domyślnych do 85. percentyla zamiast 95.
