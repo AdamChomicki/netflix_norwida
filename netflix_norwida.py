@@ -93,7 +93,7 @@ filmy_dane_bez_genres = filmy_dane.drop('genres', axis=1).join(gatunek_filmu)
 # W zamian ma dodaną kolumnę 'kategoria'.
 
 def buduj_wykres(kategoria, percentile=0.867):  ## zmiana z 0.85 na 0.80
-    df = filmy_dane_bez_genres[filmy_dane_bez_genres['belongs_to_collection'] == genre]
+    df = filmy_dane_bez_genres[filmy_dane_bez_genres['belongs_to_collection'] == kategoria]
     liczba_glosow = df[df['vote_count'].notnull()]['vote_count'].astype('int')
     srednia_glosow = df[df['vote_average'].notnull()]['vote_average'].astype('int')
     srednia_ze_sredniej_liczby_glosow = srednia_glosow.mean()
@@ -103,34 +103,44 @@ def buduj_wykres(kategoria, percentile=0.867):  ## zmiana z 0.85 na 0.80
     zakwalifikowany['vote_count'] = zakwalifikowany['vote_count'].astype('int')
     zakwalifikowany['vote_average'] = zakwalifikowany['vote_average'].astype('int')
 
-    zakwalifikowany['wr'] = zakwalifikowany.apply(lambda x: (x['vote_count'] / (x['vote_count'] + liczba_glosow_kwantyl) * x['vote_average']) + (liczba_glosow_kwantyl / (liczba_glosow_kwantyl + x['vote_count']) * srednia_glosow_mean), axis=1)
-    zakwalifikowany = zakwalifikowany.sort_values('wr', ascending=False).head(250)
+    zakwalifikowany['ocena_wazona'] = zakwalifikowany.apply(lambda x: (x['vote_count'] / (x['vote_count'] + liczba_glosow_kwantyl) * x['vote_average']) + (liczba_glosow_kwantyl / (liczba_glosow_kwantyl + x['vote_count']) * srednia_ze_sredniej_liczby_glosow), axis=1)
+    zakwalifikowany = zakwalifikowany.sort_values('ocena_wazona', ascending=False).head(250)
 
     return
+# !!! muszę ją w wolnej chwili dokładnie zinterpretować
 
-# Zobaczmy, jak działa nasza metoda, wyświetlając 15 najlepszych filmów romantycznych
-# (filmy romantyczne prawie w ogóle nie pojawiały się na naszej ogólnej liście najpopularniejszych filmów,
-# mimo że są jednym z najpopularniejszych gatunków filmowych).
+#buduj_wykres('Drama').head(5) 
+# !!! ValueError: Wrong number of items passed 5, placement implies 1
 
-### buduj_wykres('Romance').head(5) # problem z wyswietleniem 5 wierszy z uwagi na obiekt.
+dane_id = pd.read_csv(r'C:\Users\Adam\Desktop\netflix_dane\dane_id_male.csv')  
+# wczytanie danych o: id_film, id_imdb, id_tmdb.
 
-dane_id_male = pd.read_csv(r'C:\Users\Adam\Desktop\netflix_dane\dane_id_male.csv')  # wczytanie danych i utworzenie tabeli 'links_small'.
-dane_id_male = dane_id_male[dane_id_male['tmdbId'].notnull()]['tmdbId'].astype('int')  # pozostawienie tylko kolumny 'tmdbl' z tabeli 'links_small'.
+dane_id = dane_id[dane_id['tmdbId'].notnull()]['tmdbId'].astype('int')  
+# pozostawienie tylko kolumny 'tmdbId' w tabeli 'dane_id'.
 
-filmy_dane = filmy_dane.drop([19730, 29503, 35587])  # usunięcie trzech idków i jednej kolumny tj. rozmiar (45463, 25).
+filmy_dane = filmy_dane.dropna(subset=['release_date'])
+# uwzględnienie kolumny 'release_date'. Usuniecie  wartoci nan. Rozmiar (45379, 24) a było (45466, 24).
+filmy_dane = filmy_dane[filmy_dane['release_date'].str.contains("^[0-9]{4}-[0-9]{2}-[0-9]{2}")]
+# usunięcie trzech błędnych rekordów z przesuniętą datą
 
-filmy_dane['id'] = filmy_dane['id'].astype('int')  # zmiana kolumny 'id' na 'int'.
+filmy_dane['id'] = filmy_dane['id'].astype('int')  
+# zmiana typu danych z 'object' na 'int'.
 
-smd = filmy_dane[filmy_dane['id'].isin(dane_id_male)]  # utworzenie tablicy 'smd' o roz. (9099, 25). smd - co to za tablica???
-smd.shape  # wyswietlenie kształtu w konsoli tj. (9099, 25)
+filmy_dane_join_dane_id = filmy_dane[filmy_dane['id'].isin(dane_id)]  
+# nowy obiekt DataFrame zawierający te filmy/ dane z kolumną dane_id.
 
 # Rekomendacja oparta na opisie filmu
 # Najpierw spróbujmy zbudować rekomendację, korzystając z opisów filmów i sloganów.
 # Nie mamy miernika ilościowego, aby ocenić wydajność naszej maszyny, więc będzie to musiało być wykonane jakościowo.
 
-smd['tagline'] = smd['tagline'].fillna('')  # nie wiem co robi
-smd['description'] = smd['overview'] + smd['tagline']  # nie wiem co robi
-smd['description'] = smd['description'].fillna('')  # nie wiem co robi
+filmy_dane_join_dane_id['tagline'] = filmy_dane_join_dane_id['tagline'].fillna('')
+# Dzięki funkcji 'fillna('')' zastępujemy wartosci nan w kolumnie 'tagline', pustym polem.
+
+filmy_dane_join_dane_id['description'] = filmy_dane_join_dane_id['overview'] + filmy_dane_join_dane_id['tagline']  
+
+
+filmy_dane_join_dane_id['description'] = filmy_dane_join_dane_id['description'].fillna('')  
+# Dzięki funkcji 'fillna('')' zastępujemy wartosci nan w kolumnie 'description', pustym polem.
 
 tf = TfidfVectorizer(analyzer='word', ngram_range=(1, 2), min_df=0,stop_words='english')  # pojawienie się nowej tabel 'tf' # co to za tablica 'tf' ???
 tfidf_matrix = tf.fit_transform(smd['description'])  # pojawienie się nowej tablicy 'tfidf_matrix' # co ta za tablica 'tfidf_matrix' ???
