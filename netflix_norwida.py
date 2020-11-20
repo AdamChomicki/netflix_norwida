@@ -137,34 +137,52 @@ filmy_dane_join_dane_id['tagline'] = filmy_dane_join_dane_id['tagline'].fillna('
 # Dzięki funkcji 'fillna('')' zastępujemy wartosci nan w kolumnie 'tagline', pustym polem.
 
 filmy_dane_join_dane_id['description'] = filmy_dane_join_dane_id['overview'] + filmy_dane_join_dane_id['tagline']  
-
+# !!! musze to sprawdzić
 
 filmy_dane_join_dane_id['description'] = filmy_dane_join_dane_id['description'].fillna('')  
 # Dzięki funkcji 'fillna('')' zastępujemy wartosci nan w kolumnie 'description', pustym polem.
 
-tf = TfidfVectorizer(analyzer='word', ngram_range=(1, 2), min_df=0,stop_words='english')  # pojawienie się nowej tabel 'tf' # co to za tablica 'tf' ???
-tfidf_matrix = tf.fit_transform(smd['description'])  # pojawienie się nowej tablicy 'tfidf_matrix' # co ta za tablica 'tfidf_matrix' ???
+wektoryzator_tfId = TfidfVectorizer(analyzer='word', ngram_range=(1, 2), min_df=0,stop_words='english')  
+# TfidfVectorizer przypisuje wagę każdemu tokenowi która zależy nie tylko od jego częstotliwości w dokumencie, 
+# ale także od tego, jak powtarzający się termin występuje 
 
-tfidf_matrix.shape  # wyswietlenie kształtu tabeli w konsoli tj. rozm. (9099, 26124)
+tfidf_macierz = wektoryzator_tfId.fit_transform(filmy_dane_join_dane_id['description'])  
+# !!! trenowanie?
+
+tfidf_macierz.shape
+# !!! skąd ten rozmiar się wziął (9099, 268124)? Co tam jest przechowywane?
+# Przechowywane są tam nasze wartopci numeryczne/ tokeny?
 
 # Podobieństwo cosinusowe
 # Będę używał podobieństwa cosinusów, aby obliczyć wielkość liczbową, która oznacza podobieństwo między dwoma filmami.
 # Ponieważ użyliśmy wektoryzatora TF-IDF, obliczenie iloczynu skalarnego bezpośrednio da nam wynik podobieństwa cosinusów.
 # Dlatego użyjemy linear_kernel sklearn zamiast cosine_similarities, ponieważ jest znacznie szybsze.
 
-podobienstwo_cosinusowe = linear_kernel(tfidf_matrix,tfidf_matrix)  # pojawienie się nowej tablicy 'cosine_sim' o rozm. (9099, 9099). # OD TĄD DO ok 340 do wyrzucenia
+podobienstwo_cosinusowe = linear_kernel(tfidf_macierz,tfidf_macierz)  
+# "linear_kernel używamy gdy dane można rozdzielić."
+# x = linear_kernel(próbki, funkcje). Dlaczego podajemy dwukrotnie te same dane?
 
-podobienstwo_cosinusowe[0]  # wyswietlenie tablicy w konsoli
+podobienstwo_cosinusowe[0]
+# !!! jak interpretować tą liste? 
+# Czy jest ta macierz terminów, w której każdy wiersz reprezentuje dokument,
+# a każda kolumna jest adresowana do tokenu?
+# Jest to macierz podobieństwa cosinusów parami dla wszystkich filmów w naszym zbiorze danych.
 
-# Mamy teraz macierz podobieństwa cosinusów parami dla wszystkich filmów w naszym zbiorze danych.
 # Następnym krokiem jest napisanie funkcji zwracającej 30 najbardziej podobnych filmów na podstawie
 # wyniku podobieństwa cosinusowego.
 
-smd = smd.reset_index()
-tytuly = smd['title']
-indeksy = pd.Series(smd.index, index=smd['title'])  # pojawienie się nowej tablicy 'indicnes' o rozm. (9099, ).
+filmy_dane_join_dane_id = filmy_dane_join_dane_id.reset_index()
+# !!! Dlaczego dodalimy nowa kolumnę indeks?
 
-def uzyskane_rekomendacje(title):  # O TYM MOWILISMY
+tytuly = filmy_dane_join_dane_id['title']
+# przypisanie tytułów z obiektu DataFrame 'filmy_dane_join_dane_id' do zmiennej tytuly
+
+indeksy = pd.Series(filmy_dane_join_dane_id.index, index=filmy_dane_join_dane_id['title'])  
+# przypisanie do kolumny 'indeksy' tytułów i indeksów.
+# !!! jak rozumiem, filmy_dane_join_dane_id.index nadał indeks tytłom wyciągniętym z kolumny 
+# !!! 'filmy_dane_join_dane_id'? Po co?
+
+def uzyskane_rekomendacje(title):
     idx = indeksy[title]
     wynik_symulacji = list(enumerate(podobienstwo_cosinusowe[idx]))
     wynik_symulacji = sorted(wynik_symulacji, key=lambda x: x[1], reverse=True)
@@ -172,37 +190,38 @@ def uzyskane_rekomendacje(title):  # O TYM MOWILISMY
     indeksy_filmowe = [i[0] for i in wynik_symulacji]
     return tytuly.iloc[indeksy_filmowe]
 
-# Wszystko gotowe. Spróbujmy teraz uzyskać najlepsze rekomendacje dla kilku filmów i zobaczmy, jak dobre są one.
+# !!! musze to w wolnej chwili zinterpretować dokładnie.
 
-uzyskane_rekomendacje('Batman Returns').head(10)  # wyswietla filmy w konsoli
+uzyskane_rekomendacje('Batman Returns').head(5)
 
-uzyskane_rekomendacje('Jurassic Park').head(10)  # wyswietla 10 filmów w konsoli
+uzyskane_rekomendacje('Harry Potter and the Half-Blood Prince').head(5)
+# rekomendacja nie uwzględniająca użytkownika. Szuka poprostu filmów podobnych do siebie.
 
-# Widzimy, że w przypadku Mrocznego Rycerza nasz system jest w stanie zidentyfikować go jako film o Batmanie, 
-# a następnie polecić inne filmy o Batmanie jako jego najlepsze rekomendacje. Ale niestety to wszystko, 
-# co ten system może obecnie zrobić. Nie jest to zbyt przydatne dla większości ludzi, ponieważ nie bierze 
-# pod uwagę bardzo ważnych cech, takich jak obsada, ekipa, reżyser i gatunek, które określają ocenę i popularność filmu. 
-# Ktoś, kto lubił Mrocznego Rycerza, prawdopodobnie polubiłby go bardziej z powodu Nolana i nienawidziłby 
-# Batmana Forever i każdego innego filmu o niespełniającym standardzie z serii Batman.
-# Dlatego będziemy używać znacznie bardziej sugestywnych metadanych niż omówienie i slogan. 
-# W następnej podsekcji stworzymy bardziej wyrafinowaną rekomendację, która uwzględni gatunek, słowa kluczowe,
-# obsadę i ekipę.
-# Rekomendujący oparty na metadanych
-# Aby zbudować naszą standardową rekomendację treści opartą na metadanych, będziemy musieli połączyć nasz 
-# aktualny zbiór danych z załogą i zestawami danych słów kluczowych. Przygotujmy te dane jako nasz pierwszy krok.
+# Moje pytania:
+# - czy ten sposób rekomendacji rzeczywicie ma zaimplementowaną "sztuczną intelgigencję" ?
+#   Jesli dobrze rozumiem, to zostały porównanie opisy filmów a poźniej zjoinowane tabele, czy tak?
 
-obsada = pd.read_csv(r'C:\Users\Adam\Desktop\netflix_dane\obsada.csv') # pojawienie się nowej tabeli 'credits' o rozm. (45476, 3).
-slowa_kluczowe = pd.read_csv(r'C:\Users\Adam\Desktop\netflix_dane\slowa_kluczowe.csv') # pojawienie się nowej tablicy 'keywords' o rozm. (46419, 2).
-slowa_kluczowe['id'] = slowa_kluczowe['id'].astype('int') # zmiana kolumny 'id' na typ 'int'.
-obsada['id'] = obsada['id'].astype('int') # zmiana kolumny 'id' na typ 'int'.
+obsada = pd.read_csv(r'C:\Users\Adam\Desktop\netflix_dane\obsada.csv') 
+# wczytanie danych dotyczące obsady wraz z osobami realizującymi film.
 
-filmy_dane['id'] = filmy_dane['id'].astype('int') 
-filmy_dane.shape # wyswietlenie kształtu w konsoli (45466, 25)
+slowa_kluczowe = pd.read_csv(r'C:\Users\Adam\Desktop\netflix_dane\slowa_kluczowe.csv') 
+# wczytanie danych zawierających id z tmdb oraz id słów kluczowych powiązanych z filmem.
+
 filmy_dane = filmy_dane.merge(obsada, on='id') 
-filmy_dane = filmy_dane.merge(slowa_kluczowe, on='id') 
+# filmy_dane miały (45376, 25). A po łączeniu (45451, 27).
+# Dodano dwie kolumny obsada (cast) i osoby realizujące film (crew).
 
-smd = filmy_dane[filmy_dane['id'].isin(dane_id_male)] 
-smd.shape # wyswietlenie kształtu w konsoli (9219, 28).
+filmy_dane = filmy_dane.merge(slowa_kluczowe, on='id') 
+# Dodano do obiektu DataFrame 'filmy_dane kolumne 'keywords'.
+# filmy_dane ma łącznie 28 kolumn.
+
+########################## W TYM MIEJSCY SKOŃCZYŁEM ##########################
+
+filmy_dane_join_dane_id = filmy_dane[filmy_dane['id'].isin(dane_id)] 
+
+
+
+filmy_dane_join_dane_id.shape # wyswietlenie kształtu w konsoli (9219, 28).
 
 # Mamy teraz obsadę, ekipę, gatunki i napisy końcowe w jednej ramce danych. Porozmawiajmy trochę więcej, 
 # korzystając z następujących intuicji:
@@ -212,36 +231,36 @@ smd.shape # wyswietlenie kształtu w konsoli (9219, 28).
 # na opinię ludzi o filmie. Dlatego musimy wybrać tylko głównych bohaterów i odpowiadających im aktorów. 
 # Arbitralnie wybierzemy 3 najlepszych aktorów, którzy pojawią się na liście kredytów.
 
-smd['cast'] = smd['cast'].apply(literal_eval) # nie wiem co robi
-smd['crew'] = smd['crew'].apply(literal_eval) # nie wiem co robi
-smd['keywords'] = smd['keywords'].apply(literal_eval) # nie wiem co robi
-smd['cast_size'] = smd['cast'].apply(lambda x: len(x)) # nie wiem co robi
-smd['crew_size'] = smd['crew'].apply(lambda x: len(x)) # nie wiem co robi
+filmy_dane_join_dane_id['cast'] = filmy_dane_join_dane_id['cast'].apply(literal_eval) 
+filmy_dane_join_dane_id['crew'] = filmy_dane_join_dane_id['crew'].apply(literal_eval) 
+filmy_dane_join_dane_id['keywords'] = filmy_dane_join_dane_id['keywords'].apply(literal_eval)
+filmy_dane_join_dane_id['cast_size'] = filmy_dane_join_dane_id['cast'].apply(lambda x: len(x)) 
+filmy_dane_join_dane_id['crew_size'] = filmy_dane_join_dane_id['crew'].apply(lambda x: len(x))
 
-def otrzymanie_scenarzysty(x): #
+def otrzymanie_scenarzysty(x): 
     for i in x:
         if i['job'] == 'Screenplay':
             return i['name']
     return np.nan
 
-smd['screenplay'] = smd['crew'].apply(otrzymanie_scenarzysty) # 
-smd['cast'] = smd['cast'].apply(lambda x: [i['name'] for i in x] if isinstance(x, list) else []) #
-smd['cast'] = smd['cast'].apply(lambda x: x[:3] if len(x) >=3 else x) #
-smd['keywords'] = smd['keywords'].apply(lambda x: [i['name'] for i in x] if isinstance(x, list) else []) #
-smd['cast'] = smd['cast'].apply(lambda x: [str.lower(i.replace(" ", "")) for i in x]) #
+filmy_dane_join_dane_id['screenplay'] = filmy_dane_join_dane_id['crew'].apply(otrzymanie_scenarzysty) # 
+filmy_dane_join_dane_id['cast'] = filmy_dane_join_dane_id['cast'].apply(lambda x: [i['name'] for i in x] if isinstance(x, list) else []) 
+filmy_dane_join_dane_id['cast'] = filmy_dane_join_dane_id['cast'].apply(lambda x: x[:3] if len(x) >=3 else x) 
+filmy_dane_join_dane_id['keywords'] = filmy_dane_join_dane_id['keywords'].apply(lambda x: [i['name'] for i in x] if isinstance(x, list) else []) 
+filmy_dane_join_dane_id['cast'] = filmy_dane_join_dane_id['cast'].apply(lambda x: [str.lower(i.replace(" ", "")) for i in x]) 
 
 # Moje podejście do budowania rekomendującego będzie wyjątkowo hakerskie. Planuję stworzyć zrzut metadanych dla każdego filmu, który zawiera gatunki, reżysera, głównych aktorów i słowa kluczowe. Następnie używam wektoryzatora zliczania, aby utworzyć naszą macierz liczenia, tak jak to zrobiliśmy w zalecaniu opisu. Pozostałe kroki są podobne do tego, co zrobiliśmy wcześniej: obliczamy podobieństwa cosinusowe i zwracamy filmy, które są najbardziej podobne.
 # Oto kroki, które wykonuję, przygotowując dane o moich gatunkach i napisach:
 # Usuń spacje i konwertuj na małe litery ze wszystkich naszych funkcji. W ten sposób nasz silnik nie pomyli Johnny'ego Deppa i Johnny'ego Galeckiego.
 # Wspomnij reżysera 3 razy, aby nadać mu większą wagę w stosunku do całej obsady.
 
-smd['screenplay'] = smd['screenplay'].astype('str').apply(lambda x: str.lower(x.replace(" ", ""))) #
-smd['screenplay'] = smd['screenplay'].apply(lambda x: [x,x, x]) #
+filmy_dane_join_dane_id['screenplay'] = filmy_dane_join_dane_id['screenplay'].astype('str').apply(lambda x: str.lower(x.replace(" ", ""))) 
+filmy_dane_join_dane_id['screenplay'] = filmy_dane_join_dane_id['screenplay'].apply(lambda x: [x,x, x]) 
 
 # Słowa kluczowe
 # Wykonamy niewielką ilość wstępnego przetwarzania naszych słów kluczowych przed ich użyciem. Pierwszym krokiem jest obliczenie częstości występowania każdego słowa kluczowego, które pojawia się w zbiorze danych.
 
-gatunek_filmu = smd.apply(lambda x: pd.Series(x['keywords']),axis=1).stack().reset_index(level=1, drop=True) #
+gatunek_filmu = filmy_dane_join_dane_id.apply(lambda x: pd.Series(x['keywords']),axis=1).stack().reset_index(level=1, drop=True) #
 gatunek_filmu.name = 'keyword' #
 gatunek_filmu = gatunek_filmu.value_counts() #
 gatunek_filmu[:5] # wyswietlenie w konsoli jakis informacji 
@@ -262,21 +281,21 @@ def filtr_slow_kluczowych(x): #
             words.append(i)
     return words
 
-smd['keywords'] = smd['keywords'].apply(filtr_slow_kluczowych) #
-smd['keywords'] = smd['keywords'].apply(lambda x: [stemmer.stem(i) for i in x]) #
-smd['keywords'] = smd['keywords'].apply(lambda x: [str.lower(i.replace(" ", "")) for i in x]) # usuwane są spacje
-smd['soup'] = smd['keywords'] + smd['cast'] + smd['screenplay'] + smd['belongs_to_collection'] # 
-smd['soup'] = smd['soup'].apply(lambda x: ' '.join(x)) #
+filmy_dane_join_dane_id['keywords'] = filmy_dane_join_dane_id['keywords'].apply(filtr_slow_kluczowych) #
+filmy_dane_join_dane_id['keywords'] = filmy_dane_join_dane_id['keywords'].apply(lambda x: [stemmer.stem(i) for i in x]) #
+filmy_dane_join_dane_id['keywords'] = filmy_dane_join_dane_id['keywords'].apply(lambda x: [str.lower(i.replace(" ", "")) for i in x]) # usuwane są spacje
+filmy_dane_join_dane_id['soup'] = filmy_dane_join_dane_id['keywords'] + filmy_dane_join_dane_id['cast'] + filmy_dane_join_dane_id['screenplay'] + filmy_dane_join_dane_id['belongs_to_collection'] # 
+filmy_dane_join_dane_id['soup'] = filmy_dane_join_dane_id['soup'].apply(lambda x: ' '.join(x)) #
 
 count = CountVectorizer(analyzer='word',ngram_range=(1, 2),min_df=0, stop_words='english') # utworzenie tabeli 'count'. Można dodac 1,2,3.
-count_matrix = count.fit_transform(smd['soup']) # metoda fit
+count_matrix = count.fit_transform(filmy_dane_join_dane_id['soup']) # metoda fit
 
 cosine_sim = cosine_similarity(count_matrix, count_matrix) # zmiany wartosci w tabeli 'cosine_sim' tj. (9219, 9219). Czy słowo występuje czy nie występuje.
 
-smd = smd.reset_index() # 
+filmy_dane_join_dane_id = filmy_dane_join_dane_id.reset_index() # 
 
-tytuly = smd['title'] # 
-indeksy = pd.Series(smd.index, index=smd['title']) # 
+tytuly = filmy_dane_join_dane_id['title'] # 
+indeksy = pd.Series(filmy_dane_join_dane_id.index, index=filmy_dane_join_dane_id['title']) # 
 
 # Ponownie użyjemy funkcji get_recommendations, którą napisaliśmy wcześniej. 
 # Ponieważ zmieniły się nasze wyniki podobieństwa cosinusów, spodziewamy się,
@@ -395,7 +414,7 @@ def konwertuj_int(x): #
 mapa_id = pd.read_csv(r'C:/Users/Adam/Desktop/netflix_dane/dane_id_male.csv')[['movieId', 'tmdbId']] # zaciagniecie danych. Utworzenie nowej tabeli 'id_map' o rozm. (9125, 2).
 mapa_id['tmdbId'] = mapa_id['tmdbId'].apply(konwertuj_int) #
 mapa_id.columns = ['movieId', 'id'] #
-mapa_id = mapa_id.merge(smd[['title', 'id']], on='id').set_index('title') #
+mapa_id = mapa_id.merge(filmy_dane_join_dane_id[['title', 'id']], on='id').set_index('title') #
 #id_map = id_map.set_index('tmdbId') # tak było zakomentowane na stronie
 mapa_indeksow = mapa_id.set_index('id') # utworzenie nowej tabeli o naziwe 'indices_map' o rozm. (9219, 1)
 
@@ -410,7 +429,7 @@ def hybryda(userId, title): # wskazniki tytułow póxniej bierze id filmów
     wynik_cosunisowy = wynik_cosunisowy[1:10] # tylko 25 obiecujących folmów pokazano. Wyprowadzić gdzie indziej ten parametrów.
     indeksy_filmowe = [i[0] for i in wynik_cosunisowy] # później znajdujemy indkesy tych filmów.
     
-    filmy = smd.iloc[indeksy_filmowe][['title', 'vote_count', 'vote_average', 'year', 'id']] # później patrzymy z którego roku, etc.
+    filmy = filmy_dane_join_dane_id.iloc[indeksy_filmowe][['title', 'vote_count', 'vote_average', 'year', 'id']] # później patrzymy z którego roku, etc.
     filmy['est'] = filmy['id'].apply(lambda x: svd.predict(userId, mapa_indeksow.loc[x]['movieId']).est) # tu robimy predyckje. Wiesz kim jest nasz user, i powiedz jak spodobało się te 25 filmów.
     filmy = filmy.sort_values('est', ascending=False) # przerobienie funkjci aby wykorzystywała get_recommendaition
     return filmy.head(5)
@@ -418,6 +437,7 @@ def hybryda(userId, title): # wskazniki tytułow póxniej bierze id filmów
 hybryda(1, 'Avatar') # wygenerowanie danych w kodzie
 hybryda(500, 'Avatar') # wygenerowanie danych w kodzie
 
+### WŁASNE NOTATKI I INNE ###
 
 # jak porównać wyniki naszych rekomendacji
 # obejrzały 10 filmów i uznały czy rzeczywicie te filmy są dobre.
@@ -427,8 +447,7 @@ hybryda(500, 'Avatar') # wygenerowanie danych w kodzie
 # Częsć userow moze być testerami naszej aplikacji.
 # zrobić exele z danymi (po 1 rekordzie) 
 # zrobić bazę danych w MS SQL z plików na których pracuje (dla jasnosci co z czyms ie łączy).
-# filmy_dane = filmy_dane.dropna(subset=['release_date'])
-# filmy_dane = filmy_dane[filmy_dane['release_date'].str.contains(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")]
+
 
 # Ustalenie minimalnej liczby głosów wymagajnej do umieszczanie filmu na liscie filmów proponowanych. 
 # Aby film znalazł się w ww. puli, musi mieć liczbę głosów większą niż 95% pozostałych filmów.
@@ -436,3 +455,24 @@ hybryda(500, 'Avatar') # wygenerowanie danych w kodzie
 
 # Skonstruujmy teraz naszą funkcję, która buduje wykresy dla poszczególnych gatunków.
 # W tym celu użyjemy rozluźnienia naszych warunków domyślnych do 85. percentyla zamiast 95.
+
+# W następnej podsekcji stworzymy bardziej wyrafinowaną rekomendację, która uwzględni gatunek, słowa kluczowe,
+# obsadę i ekipę.
+# Rekomendujący oparty na metadanych
+# slowa_kluczowe['id'] = slowa_kluczowe['id'].astype('int')
+# zmiana kolumny 'id' na typ 'int'.
+# obsada['id'] = obsada['id'].astype('int') # zmiana kolumny 'id' na typ 'int'.
+
+# Aby zbudować naszą standardową rekomendację treści opartą na metadanych, będziemy musieli połączyć nasz 
+# aktualny zbiór danych z załogą i zestawami danych słów kluczowych. Przygotujmy te dane jako nasz pierwszy krok.
+# filmy_dane['id'] = filmy_dane['id'].astype('int') 
+
+
+
+
+
+
+
+
+
+
