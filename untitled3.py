@@ -15,6 +15,8 @@ from surprise import SVD
 from surprise import Dataset
 from surprise.model_selection import cross_validate
 
+from sklearn.ensemble import IsolationForest
+
 import warnings; warnings.simplefilter('ignore') 
 # blokuje komunikaty ostrzegawcze o np. niektualnej wersji
 
@@ -32,7 +34,6 @@ liczba_glosow = filmy_dane[filmy_dane['vote_count'].notnull()]['vote_count'].ast
 # oraz tylko te wartosci które nie są nulami i zmieniami typ danych na 'int'.
 # Dlatego nasza kolumna 'liczba_glosow' ma 45460 rekordów.
 # O 6 mniej niż nasz obiekt DataFrame 'filmy_dane'. 
-# !!! Do weryfikacji czy tak jest napewno.
 
 srednia_glosow = filmy_dane[filmy_dane['vote_average'].notnull()]['vote_average'].astype('int')
 # dane o filmach przypisujemy do zmiennej 'srednia_glosow'.
@@ -71,7 +72,7 @@ def ocena_wazona(x):
     return (l_liczba_glosow / (l_liczba_glosow + liczba_glosow_kwantyl) * s_srednia_glosow) + (liczba_glosow_kwantyl / (liczba_glosow_kwantyl + l_liczba_glosow) * srednia_ze_sredniej_liczby_glosow)
 # funkcja ocena_wazona 
 # !!! dzięki tej funkcji okreslamy wagę ocen dla poszczególnego filmu?   
-# !!! muszę ją w wolnej chwili dokładnie zinterpretować
+# muszę ją w wolnej chwili dokładnie zinterpretować
 
 zakwalifikowany['ocena_wazona'] = zakwalifikowany.apply(ocena_wazona,axis=1)  
 # dodanie kolumny 'ocena_wazona' do obiektu 'zakwalifikowany'. Obecny rozmiar to (6055, 7). Czyli o jedną kolumnę więcej niż poprzednio.
@@ -83,7 +84,7 @@ zakwalifikowany = zakwalifikowany.sort_values('ocena_wazona', ascending=False).h
 
 gatunek_filmu = filmy_dane.apply(lambda x: pd.Series(x['genres']), axis=1).stack().reset_index(level=1,drop=True)  
 # !!! muszę ją w wolnej chwili dokładnie zinterpretować
-# !!! po co wyciagamy wszytskie agtunki filmów? Rozmiar (91106, ). Aby później je z joinować z obiektem 'filmy_dane'?
+# po co wyciagamy wszytskie agtunki filmów? Rozmiar (91106, ). Aby później je z joinować z obiektem 'filmy_dane'?
 
 gatunek_filmu.name = 'kategoria'
 # zmiany nazwy kolumny tabeli 'gatunek_filmu' z '0' na 'kategoria'
@@ -108,9 +109,6 @@ def buduj_wykres(kategoria, percentile=0.867):  ## zmiana z 0.85 na 0.80
 
     return
 # !!! muszę ją w wolnej chwili dokładnie zinterpretować
-
-#buduj_wykres('Drama').head(5) 
-# !!! ValueError: Wrong number of items passed 5, placement implies 1
 
 dane_id = pd.read_csv(r'C:/Users/Adam/Desktop/netflix_dane_edit/dane_id_male.csv')  
 # wczytanie danych o: id_film, id_imdb, id_tmdb.
@@ -180,7 +178,7 @@ tytuly = filmy_dane_join_dane_id['title']
 indeksy = pd.Series(filmy_dane_join_dane_id.index, index=filmy_dane_join_dane_id['title'])  
 # przypisanie do kolumny 'indeksy' tytułów i indeksów.
 # !!! jak rozumiem, filmy_dane_join_dane_id.index nadał indeks tytłom wyciągniętym z kolumny 
-# !!! 'filmy_dane_join_dane_id'? Po co?
+# 'filmy_dane_join_dane_id'? Po co?
 
 def uzyskane_rekomendacje(title):
     idx = indeksy[title]
@@ -213,8 +211,6 @@ filmy_dane = filmy_dane.merge(obsada, on='id')
 filmy_dane = filmy_dane.merge(slowa_kluczowe, on='id') 
 # Dodano do obiektu DataFrame 'filmy_dane kolumne 'keywords'.
 # filmy_dane ma łącznie 28 kolumn.
-
-####################### W TYM MIEJSCY SKOŃCZYŁEM ##########################
 
 filmy_dane_join_dane_id = filmy_dane[filmy_dane['id'].isin(dane_id)] 
 # dodanie kolumny index do obiektu DataFrame 'film_dane_join_dane_id'. Roz. (9219, 28).
@@ -329,102 +325,36 @@ tytuly = filmy_dane_join_dane_id['title']
 indeksy = pd.Series(filmy_dane_join_dane_id.index, index=filmy_dane_join_dane_id['title'])
 # !!! 
 
+uzyskane_rekomendacje('Batman Returns').head(5)
+# pokazuje tylko te filmy, które są Tima Burtona
 
+czytelnik = Reader()
+# !!! po co to? 
 
-uzyskane_rekomendacje('The Godfather').head(5) # generuje dane w konsoli. # O FUNKCJI GET RECCOMENDATION 
+oceny = pd.read_csv(r'C:/Users/Adam/Desktop/netflix_dane_edit/ratings_small.csv') 
+# wczytanie użytkownika, filmu i oceny.
 
-# Jestem znacznie bardziej zadowolony z rezultatów, które uzyskuję tym razem. 
-# Wydaje się, że zalecenia uznały inne filmy Christophera Nolana 
-# (ze względu na dużą wagę przypisaną reżyserowi) i umieściły je jako najlepsze rekomendacje. 
-# Podobało mi się oglądanie The Dark Knight, a także niektórych innych na liście, 
-# w tym Batman Begins, The Prestige i The Dark Knight Rises.
-# Możemy oczywiście eksperymentować na tym silniku, wypróbowując różne wagi
-# dla naszych funkcji (reżyserzy, aktorzy, gatunki), ograniczając liczbę słów kluczowych, 
-# których można użyć w zupie, ważąc gatunki na podstawie ich częstotliwości, 
-# pokazując tylko filmy o tym samym języki itp.
-# Pozwólcie, że otrzymam również rekomendacje dotyczące innego filmu, Wredne dziewczyny, 
-# który jest ulubionym filmem mojej dziewczyny.
+dane = Dataset.load_from_df(oceny[['userId', 'movieId', 'rating']], czytelnik)
+# !!! co to jest?
 
-uzyskane_rekomendacje('Mean Girls').head(10) # generuje dane w konsoli.
+svd = SVD()
+# !!! o tym poczytać
 
-# Popularność i oceny.
-# Jedną rzeczą, którą zauważamy w naszym systemie rekomendacji, jest to, 
-# że poleca filmy niezależnie od ocen i popularności. Prawdą jest, że 
-# Batman i Robin mają wiele podobnych postaci w porównaniu z Mrocznym Rycerzem, 
-# ale był to okropny film, którego nie należy nikomu polecać.
-# Dlatego dodamy mechanizm usuwania złych filmów i zwracanych filmów, 
-# które są popularne i miały dobrą reakcję krytyczną.
-# Wezmę 25 najlepszych filmów na podstawie wyników podobieństwa i obliczę głos 
-# dla filmu 60-centylowego. Następnie, używając tego jako wartości m, 
-# obliczymy ważoną ocenę każdego filmu, korzystając ze wzoru IMDB, tak jak to zrobiliśmy 
-# w sekcji Prosty polecający.
+cross_validate (svd, dane, measures=['RMSE', 'MAE'], cv=5, verbose=True) 
+# !!! o tym poczytać. To jest chyba nasze wyników po trenowaniu. RMSE o tym wiadczy.
 
-#def ulepszone_rekomendacje(title): # O TYM MOWILISMY # może z tego zrezygnować. # możemy zostać consine similitary
-#    idx = indeksy[title]
-#    wynik_cosunisowy = list(enumerate(cosine_sim[idx]))
-#    wynik_cosunisowy = sorted(wynik_cosunisowy, key=lambda x: x[1], reverse=True)
-#    wynik_cosunisowy = wynik_cosunisowy[1:26]
-#    indeksy_filmowe = [i[0] for i in wynik_cosunisowy]
-#    
-#    filmy = smd.iloc[indeksy_filmowe][['title', 'vote_count', 'vote_average', 'year']]
-#    liczba_glosow = filmy[filmy['vote_count'].notnull()]['vote_count'].astype('int')
-#    srednia_glosow = filmy[filmy['vote_average'].notnull()]['vote_average'].astype('int')
-#    srednia_glosow_mean = srednia_glosow.mean()
-#    liczba_glosow_kwantyl = liczba_glosow.quantile(0.60)
-#    zakwalifikowany = filmy[(filmy['vote_count'] >= liczba_glosow_kwantyl) & (filmy['vote_count'].notnull()) & (filmy['vote_average'].notnull())]
-#    zakwalifikowany['vote_count'] = zakwalifikowany['vote_count'].astype('int')
-#    zakwalifikowany['vote_average'] = zakwalifikowany['vote_average'].astype('int')
-#    zakwalifikowany['wr'] = zakwalifikowany.apply(ocena_wazona, axis=1)
-#    zakwalifikowany = zakwalifikowany.sort_values('wr', ascending=False).head(10)
-#    return zakwalifikowany
-
-#ulepszone_rekomendacje('The Dark Knight') # wyswietlenie w konsoli danych o tytułach filmów.
-
-# Pozwólcie, że poznam także rekomendacje dotyczące Wrednych dziewczyn, ulubionego filmu mojej dziewczyny.
-
-#ulepszone_rekomendacje('Mean Girls') # wyswietlenie w konsoli danych o tytułach filmów.
-
-# Niestety Batman i Robin nie znikają z naszej listy rekomendacji. Wynika to prawdopodobnie z faktu, 
-# że ma ocenę 4, która jest tylko nieco poniżej średniej w TMDB. Z pewnością nie zasługuje na 4, 
-# kiedy niesamowite filmy, takie jak Mroczny rycerz Powstaje, mają tylko 7. 
-# Jednak niewiele możemy z tym zrobić. W związku z tym zakończymy tutaj naszą sekcję dotyczącą 
-# rekomendacji opartych na treści i wrócimy do niej, gdy będziemy budować silnik hybrydowy.
-# Filtrowanie oparte na współpracy
-# Nasz silnik oparty na treści ma poważne ograniczenia. Może tylko sugerować filmy, 
-# które są zbliżone do określonego filmu. Oznacza to, że nie jest w stanie wychwycić 
-# gustów i przedstawiać rekomendacji dla różnych gatunków.
-# Ponadto silnik, który zbudowaliśmy, nie jest tak naprawdę osobisty, ponieważ nie odzwierciedla 
-# osobistych upodobań i uprzedzeń użytkownika. Każdy, kto zapyta nasz silnik o rekomendacje 
-# oparte na filmie, otrzyma te same rekomendacje dla tego filmu, niezależnie od tego, kim jest.
-# Dlatego w tej sekcji użyjemy techniki zwanej Collaborative Filtering, 
-# aby przedstawić zalecenia obserwatorom filmów. Filtrowanie zespołowe opiera się na założeniu, 
-# że użytkownicy podobni do mnie mogą być wykorzystywani do przewidywania, jak bardzo
-# spodoba mi się dany produkt lub usługa, z których korzystali / doświadczyli, a ja nie.
-# Nie będę wdrażać filtrowania opartego na współpracy od podstaw. 
-# Zamiast tego skorzystam z biblioteki Surprise, która wykorzystywała niezwykle wydajne algorytmy, 
-# takie jak dekompozycja wartości osobliwych (SVD), aby zminimalizować
-# RMSE (Root Mean Square Error) i dać świetne zalecenia.
-
-czytelnik = Reader() # utworzenie tabeli 'Reader'
-oceny = pd.read_csv(r'C:/Users/Adam/Desktop/netflix_dane/oceny_small.csv') # zaciągnięcie danych. Utworzenie tabeli 'ratings' o roz. (100004, 4).
-oceny.head() # wyswietlenie danych w konsoli.
-dane = Dataset.load_from_df(oceny[['userId', 'movieId', 'rating']], czytelnik) # O TYM MOWILISMY
-
-# data.split(n_folds=5) # błąd AttributeError: 'DatasetAutoFolds' object has no attribute 'split'
-svd = SVD() # pojawienie się nowej tablicy 'svd'
-
-cross_validate (svd, dane, measures=['RMSE', 'MAE'], cv=5, verbose=True) # zmieniłem z 'evaluate(svd, data, measures=['RMSE', 'MAE'])'. Otrzymanie wyniku w konsoli.
-
-# Otrzymujemy średni Root Mean Sqaure Error 0,8963, który jest więcej niż wystarczająco dobry w naszym przypadku. Trenujmy teraz na naszym zbiorze danych i dojdźmy do prognoz.
+# Trenujmy teraz na naszym zbiorze danych i dojdźmy do prognoz.
 
 trainset = dane.build_full_trainset()
+# !!! trenowanie? Troche za szybkie.
 
 # svd.train(trainset) # błąd 'SVD' object has no attribute 'train'
 # Wybierzmy użytkownika 5000 i sprawdźmy, jakie oceny wystawił. Raczej użytkownika o id = 1.
 
-oceny[oceny['userId'] == 1] # wyswietlenie danych w konsoli.
-svd.predict(1, 302, 3) # wyswietlenie danych w konsoli.
+oceny[oceny['userId'] == 1]
+# wyswietlenie wszytskich filmow i ocen którzy uzytkownik 1 udzielił.
 
+svd.predict(1, 302, 3) 
 # W przypadku filmu o identyfikatorze 302 otrzymujemy szacunkową prognozę na 2,686. 
 # Jedną z zaskakujących cech tego systemu rekomendacji jest to, że nie obchodzi go, 
 # czym jest film (lub co zawiera). Działa wyłącznie na podstawie przypisanego identyfikatora 
@@ -434,26 +364,38 @@ svd.predict(1, 302, 3) # wyswietlenie danych w konsoli.
 # Dane wejściowe: identyfikator użytkownika i tytuł filmu
 # Wynik: podobne filmy posortowane na podstawie oczekiwanych ocen danego użytkownika.
 
-def konwertuj_int(x): #
-    try:
-        return int(x)
-    except:
-        return np.nan
+##def konwertuj_int(x): #
+  ##  try:
+    ##    return int(x)
+    ##except:
+      ##  return np.nan
     
-mapa_id = pd.read_csv(r'C:/Users/Adam/Desktop/netflix_dane/dane_id_male.csv')[['movieId', 'tmdbId']] # zaciagniecie danych. Utworzenie nowej tabeli 'id_map' o rozm. (9125, 2).
-mapa_id['tmdbId'] = mapa_id['tmdbId'].apply(konwertuj_int) #
-mapa_id.columns = ['movieId', 'id'] #
-mapa_id = mapa_id.merge(filmy_dane_join_dane_id[['title', 'id']], on='id').set_index('title') #
-#id_map = id_map.set_index('tmdbId') # tak było zakomentowane na stronie
-mapa_indeksow = mapa_id.set_index('id') # utworzenie nowej tabeli o naziwe 'indices_map' o rozm. (9219, 1)
+mapa_id = pd.read_csv(r'C:/Users/Adam/Desktop/netflix_dane_edit/dane_id_male.csv')[['movieId', 'tmdbId']] 
+# wczytanie idków dotyczacyh filmóW. Mamy nowy obiekt DataFrame 'mapa_id' z dwiema kolumnami tj. 'movieID' i 'tmdbId'.
+# utworzenie nowego obiektu DataFrame mapa_id
 
-def hybryda(userId, title): # wskazniki tytułow póxniej bierze id filmów 
-    idx = indeksy[title] # movie id = id filmow, druga tab. to id rekomendacji.
+#mapa_id['tmdbId'] = mapa_id['tmdbId'].apply(konwertuj_int) #
+
+mapa_id.columns = ['movieId', 'id']
+# !!! nie wiem po co
+
+mapa_id = mapa_id.merge(filmy_dane_join_dane_id[['title', 'id']], on='id').set_index('title') 
+# zmiana w obiekcie DataFrame 'mapa_id'. 'Index' zmieniono na 'title', a 'tmdbId' na 'id'.
+
+#id_map = id_map.set_index('tmdbId') # tak było zakomentowane na stronie
+
+mapa_indeksow = mapa_id.set_index('id') 
+# utworzenie nowej tabeli o naziwe 'indices_map' zawierającej 'id' oraz 'movieId'.
+
+def hybryda(userId, title): 
+    # wskazniki tytułow póxniej bierze id filmów 
+    idx = indeksy[title] 
+    # movie id = id filmow, druga tab. to id rekomendacji.
     tmdbId = mapa_id.loc[title]['id']
     print(idx)
     movie_id = mapa_id.loc[title]['movieId']
     
-    wynik_cosunisowy = list(enumerate(cosine_sim[int(idx)])) # nie ma znaczenia większego
+    wynik_cosunisowy = list(enumerate(podobienstwo_cosinusowe[int(idx)])) # nie ma znaczenia większego
     wynik_cosunisowy = sorted(wynik_cosunisowy, key=lambda x: x[1], reverse=True) # jak wszytskie filmy są podobne do tego jednego. 
     wynik_cosunisowy = wynik_cosunisowy[1:10] # tylko 25 obiecujących folmów pokazano. Wyprowadzić gdzie indziej ten parametrów.
     indeksy_filmowe = [i[0] for i in wynik_cosunisowy] # później znajdujemy indkesy tych filmów.
@@ -466,9 +408,14 @@ def hybryda(userId, title): # wskazniki tytułow póxniej bierze id filmów
 hybryda(1, 'Avatar') # wygenerowanie danych w kodzie
 hybryda(500, 'Avatar') # wygenerowanie danych w kodzie
 
+
+#outliers_fraction = 0.15
+#anomaly_algorithms = [("Isolation Forest", IsolationForest(contamination=outliers_fraction,random_state=42))]
+#anomaly_algorithms.fit(filmy_dane)
+
+
 ### WŁASNE NOTATKI I INNE ###
 
-# jak porównać wyniki naszych rekomendacji
 # obejrzały 10 filmów i uznały czy rzeczywicie te filmy są dobre.
 # przerobić na raitngs_small być może. To jest w kontekcie oceny.
 # jak porównywać modele, jak je oceniają. Do klasteryzacji, do rekomendacji <--.
@@ -542,3 +489,29 @@ hybryda(500, 'Avatar') # wygenerowanie danych w kodzie
 # Ponieważ zmieniły się nasze wyniki podobieństwa cosinusów, spodziewamy się,
 # że da nam to inne (i prawdopodobnie lepsze) wyniki. Poszukajmy ponownie The Dark Knight 
 # i zobaczmy, jakie rekomendacje otrzymam tym razem.
+
+
+# Jestem znacznie bardziej zadowolony z rezultatów, które uzyskuję tym razem. 
+# Wydaje się, że zalecenia uznały inne filmy Christophera Nolana 
+# (ze względu na dużą wagę przypisaną reżyserowi) i umieściły je jako najlepsze rekomendacje. 
+# Podobało mi się oglądanie The Dark Knight, a także niektórych innych na liście, 
+# w tym Batman Begins, The Prestige i The Dark Knight Rises.
+# Możemy oczywiście eksperymentować na tym silniku, wypróbowując różne wagi
+# dla naszych funkcji (reżyserzy, aktorzy, gatunki), ograniczając liczbę słów kluczowych, 
+# których można użyć w zupie, ważąc gatunki na podstawie ich częstotliwości, 
+# pokazując tylko filmy o tym samym języki itp.
+# Pozwólcie, że otrzymam również rekomendacje dotyczące innego filmu, Wredne dziewczyny, 
+# który jest ulubionym filmem mojej dziewczyny.
+
+
+# Jestem znacznie bardziej zadowolony z rezultatów, które uzyskuję tym razem. 
+# Wydaje się, że zalecenia uznały inne filmy Christophera Nolana 
+# (ze względu na dużą wagę przypisaną reżyserowi) i umieściły je jako najlepsze rekomendacje. 
+# Podobało mi się oglądanie The Dark Knight, a także niektórych innych na liście, 
+# w tym Batman Begins, The Prestige i The Dark Knight Rises.
+# Możemy oczywiście eksperymentować na tym silniku, wypróbowując różne wagi
+# dla naszych funkcji (reżyserzy, aktorzy, gatunki), ograniczając liczbę słów kluczowych, 
+# których można użyć w zupie, ważąc gatunki na podstawie ich częstotliwości, 
+# pokazując tylko filmy o tym samym języki itp.
+# Pozwólcie, że otrzymam również rekomendacje dotyczące innego filmu, Wredne dziewczyny, 
+# który jest ulubionym filmem mojej dziewczyny.
