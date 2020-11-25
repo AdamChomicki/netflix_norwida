@@ -14,8 +14,8 @@ from surprise import SVD
 # Rozkład według wartości osobliwych
 from surprise import Dataset
 from surprise.model_selection import cross_validate
-
 from sklearn.ensemble import IsolationForest
+from sklearn.model_selection import train_test_split
 
 import warnings; warnings.simplefilter('ignore') 
 # blokuje komunikaty ostrzegawcze o np. niektualnej wersji
@@ -334,6 +334,27 @@ czytelnik = Reader()
 oceny = pd.read_csv(r'C:/Users/Adam/Desktop/netflix_dane_edit/ratings_small.csv') 
 # wczytanie użytkownika, filmu i oceny.
 
+###############################################
+
+def oceny_testowe(oceny, test_ratio):
+    shuffled_indices = np.random.permutation(len(oceny))
+    test_set_size = int(len(oceny) * test_ratio)
+    test_indices = shuffled_indices[:test_set_size]
+    train_indices = shuffled_indices[test_set_size:]
+    return oceny.iloc[train_indices], oceny.iloc[test_indices]
+    
+train_oceny, test_oceny = train_test_split(oceny, test_size=0.2, random_state=42)
+
+outliers_fraction = 0.15
+estimator = IsolationForest(contamination=outliers_fraction,random_state=42)
+estimator.fit(oceny)
+
+recenzja = oceny
+kolumny = ['userId','movieId']
+recenzja = recenzja[kolumny]
+
+###############################################
+
 dane = Dataset.load_from_df(oceny[['userId', 'movieId', 'rating']], czytelnik)
 # !!! co to jest?
 
@@ -409,109 +430,29 @@ hybryda(1, 'Avatar') # wygenerowanie danych w kodzie
 hybryda(500, 'Avatar') # wygenerowanie danych w kodzie
 
 
-#outliers_fraction = 0.15
-#anomaly_algorithms = [("Isolation Forest", IsolationForest(contamination=outliers_fraction,random_state=42))]
-#anomaly_algorithms.fit(filmy_dane)
-
-
-### WŁASNE NOTATKI I INNE ###
-
 # obejrzały 10 filmów i uznały czy rzeczywicie te filmy są dobre.
-# przerobić na raitngs_small być może. To jest w kontekcie oceny.
-# jak porównywać modele, jak je oceniają. Do klasteryzacji, do rekomendacji <--.
-# Dowiedzieć się tego.
-# Częsć userow moze być testerami naszej aplikacji.
-# zrobić exele z danymi (po 1 rekordzie) 
-# zrobić bazę danych w MS SQL z plików na których pracuje (dla jasnosci co z czyms ie łączy).
+# przerobić raitngs_small. To jest w kontekcie oceny.
 
-# Ustalenie minimalnej liczby głosów wymagajnej do umieszczanie filmu na liscie filmów proponowanych. 
-# Aby film znalazł się w ww. puli, musi mieć liczbę głosów większą niż 95% pozostałych filmów.
-# Tylko 5 % filmów będzie proponowanych. 
-
-# Skonstruujmy teraz naszą funkcję, która buduje wykresy dla poszczególnych gatunków.
-# W tym celu użyjemy rozluźnienia naszych warunków domyślnych do 85. percentyla zamiast 95.
-
-# W następnej podsekcji stworzymy bardziej wyrafinowaną rekomendację, która uwzględni gatunek, słowa kluczowe,
-# obsadę i ekipę.
-# Rekomendujący oparty na metadanych
-# slowa_kluczowe['id'] = slowa_kluczowe['id'].astype('int')
-# zmiana kolumny 'id' na typ 'int'.
-# obsada['id'] = obsada['id'].astype('int') # zmiana kolumny 'id' na typ 'int'.
-
-# Aby zbudować naszą standardową rekomendację treści opartą na metadanych, będziemy musieli połączyć nasz 
-# aktualny zbiór danych z załogą i zestawami danych słów kluczowych. Przygotujmy te dane jako nasz pierwszy krok.
-# filmy_dane['id'] = filmy_dane['id'].astype('int') 
-
-
-# 20.11.2020
-# wartoci odstające - jako anomalie. 
-# Nie mamy możłiwosci testowanie tego rozwiązania.
-# sklearn 
-# estimator = IsolationForest(contamination=outliers_fraction,
-# random_state=42)
-# estimator.fit_transform(data)  
-# outliers_fraction = 0.05Wpisz wiadomość
-# 
-# testowanie tutaj jest trudne. 
-# małe projekty to 10% testowych 
-# będziemy mieli dane testowe.
-# 
-# 20% użytkowników z 1 oceną.
-# nagradzany jesli jest na liscie to + a jesli nei jest ok to 0.5 +
-# nie podobał a jest na liscie to duzy -
-#
 # stworzyc zbior testowy
-# z tego small podzielimy na dwa
-#
-# uzytkownik ktorego reviu jest przynajmniej 10 ocen.
-# dla 1000 uzytwkonikow jedna ocene. 
-# napisac funkcje ktora bedzie po 1 przyjmowac ta tablice i rekomendacje
-# trafiony 10 pkt
-# 1 pkt jesli 
-# -10 jesli nie podoba
-#
-# powtarzamy dla 1000 uzytwkonikwo i wypluwa sume
-# 
-# odpowiedx w wersji procentowej
-# porownywanie modeli miedzy sobą
-#
-# 
-#
-#
-# Planuję stworzyć zrzut metadanych dla każdego filmu, który zawiera gatunki, reżysera, głównych aktorów i słowa kluczowe. 
-# Następnie używam wektoryzatora zliczania, aby utworzyć naszą macierz liczenia, tak jak to zrobiliśmy w zalecaniu opisu. 
-# Pozostałe kroki są podobne do tego, co zrobiliśmy wcześniej: obliczamy podobieństwa cosinusowe i zwracamy filmy, które są najbardziej podobne.
-# Oto kroki, które wykonuję, przygotowując dane o moich gatunkach i napisach:
-# Usuń spacje i konwertuj na małe litery ze wszystkich naszych funkcji. W ten sposób nasz silnik nie pomyli Johnny'ego Deppa i Johnny'ego Galeckiego.
-# Wspomnij reżysera 3 razy, aby nadać mu większą wagę w stosunku do całej obsady.
-
-# Ponownie użyjemy funkcji get_recommendations, którą napisaliśmy wcześniej. 
-# Ponieważ zmieniły się nasze wyniki podobieństwa cosinusów, spodziewamy się,
-# że da nam to inne (i prawdopodobnie lepsze) wyniki. Poszukajmy ponownie The Dark Knight 
-# i zobaczmy, jakie rekomendacje otrzymam tym razem.
+# rating_small podzielimy na dwa zbiory
+# uzytkownik ktory dał przynajmniej 10 ocen. 
 
 
-# Jestem znacznie bardziej zadowolony z rezultatów, które uzyskuję tym razem. 
-# Wydaje się, że zalecenia uznały inne filmy Christophera Nolana 
-# (ze względu na dużą wagę przypisaną reżyserowi) i umieściły je jako najlepsze rekomendacje. 
-# Podobało mi się oglądanie The Dark Knight, a także niektórych innych na liście, 
-# w tym Batman Begins, The Prestige i The Dark Knight Rises.
-# Możemy oczywiście eksperymentować na tym silniku, wypróbowując różne wagi
-# dla naszych funkcji (reżyserzy, aktorzy, gatunki), ograniczając liczbę słów kluczowych, 
-# których można użyć w zupie, ważąc gatunki na podstawie ich częstotliwości, 
-# pokazując tylko filmy o tym samym języki itp.
-# Pozwólcie, że otrzymam również rekomendacje dotyczące innego filmu, Wredne dziewczyny, 
-# który jest ulubionym filmem mojej dziewczyny.
 
 
-# Jestem znacznie bardziej zadowolony z rezultatów, które uzyskuję tym razem. 
-# Wydaje się, że zalecenia uznały inne filmy Christophera Nolana 
-# (ze względu na dużą wagę przypisaną reżyserowi) i umieściły je jako najlepsze rekomendacje. 
-# Podobało mi się oglądanie The Dark Knight, a także niektórych innych na liście, 
-# w tym Batman Begins, The Prestige i The Dark Knight Rises.
-# Możemy oczywiście eksperymentować na tym silniku, wypróbowując różne wagi
-# dla naszych funkcji (reżyserzy, aktorzy, gatunki), ograniczając liczbę słów kluczowych, 
-# których można użyć w zupie, ważąc gatunki na podstawie ich częstotliwości, 
-# pokazując tylko filmy o tym samym języki itp.
-# Pozwólcie, że otrzymam również rekomendacje dotyczące innego filmu, Wredne dziewczyny, 
-# który jest ulubionym filmem mojej dziewczyny.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
