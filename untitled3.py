@@ -445,6 +445,7 @@ hybryda(500, 'Avatar') # wygenerowanie danych w kodzie
 # stworzyc zbior testowy
 # rating_small podzielimy na dwa zbiory
 # uzytkownik ktory dał przynajmniej 10 ocen. 
+# TEST
 
 
 
