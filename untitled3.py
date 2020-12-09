@@ -22,8 +22,6 @@ import warnings; warnings.simplefilter('ignore')
 
 filmy_dane = pd.read_csv(r'C:/Users/Adam/Desktop/netflix_dane_edit/filmy_dane.csv')  
 # wczytanie pliku .csv z danymi takimi jak tytuł, język, data produkcji. Rozmiar (45466, 24).
-filmy_dane.head(3) 
- # wyswietlenie 3 pierwszych wierszy
 
 filmy_dane['genres'] = filmy_dane['genres'].fillna('[]').apply(literal_eval).apply(lambda x: [i['name'] for i in x] if isinstance(x, list) else [])  
 # formuła oceny wazonej. 
@@ -32,22 +30,22 @@ filmy_dane['genres'] = filmy_dane['genres'].fillna('[]').apply(literal_eval).app
 liczba_glosow = filmy_dane[filmy_dane['vote_count'].notnull()]['vote_count'].astype('int') 
 # do zmiennej liczba głosów, przypisujemy zbiór danych o filmie, nastepnie wyciągamy kolumne 'liczba głosów' 
 # oraz tylko te wartosci które nie są nulami i zmieniami typ danych na 'int'.
-# Dlatego nasza kolumna 'liczba_glosow' ma 45460 rekordów.
+# Dlatego nasza kolumna 'liczba_glosow' ma (45460, ).
 # O 6 mniej niż nasz obiekt DataFrame 'filmy_dane'. 
 
 srednia_glosow = filmy_dane[filmy_dane['vote_average'].notnull()]['vote_average'].astype('int')
-# dane o filmach przypisujemy do zmiennej 'srednia_glosow'.
+# dane o filmach przypisujemy do zmiennej 'srednia_glosow'(45460, ).
 # Nastepnie wyciągamy kolumne 'srednia_glosow' oraz tylko te wartosci które nie są nulami i zmieniami typ danych na 'int'.
 
 srednia_ze_sredniej_liczby_glosow = srednia_glosow.mean()
 # liczymy srednią, ze sredniej liczby głosów. Wynosi 5.24.
 
-liczba_glosow_kwantyl = liczba_glosow.quantile(0.867) ### poprawne
+liczba_glosow_kwantyl = liczba_glosow.quantile(0.867) 
 # ustawienie liczby głosów tak, (oddane głosy tmdb) aby film mogł sie znaleźć na liscie proponowanych pozycji.
 # Obecne ustawienie = min. 100 oddanych glosow.   
 
 filmy_dane['year'] = pd.to_datetime(filmy_dane['release_date'], errors='coerce').apply(lambda x: str(x).split('-')[0] if x != np.nan else np.nan)
-# !!! muszę ją w wolnej chwili dokładnie zinterpretować
+# Dodaje kolumne 'year' do obiektu dataframe film_dane.
 
 zakwalifikowany = filmy_dane[(filmy_dane['vote_count'] >= liczba_glosow_kwantyl) & (filmy_dane['vote_count'].notnull()) & (filmy_dane['vote_average'].notnull())][['title', 'year', 'vote_count', 'vote_average', 'popularity', 'genres']]  
 # do zmiennej 'zakwalifikowany' przypsiujemy dane o filmach. 
@@ -82,19 +80,23 @@ zakwalifikowany = zakwalifikowany.sort_values('ocena_wazona', ascending=False).h
 # 500 tytułów będzie branych pod uwage jako filmy proponowane. 
 # !!! Z tmdb są pobrani użytkownicy a z imdb są pobrane filmy? Muszę to sprawdzić.
 
+# Budowa funkcji która buduje wykres dla poszczególnych gatunkow.
+
 gatunek_filmu = filmy_dane.apply(lambda x: pd.Series(x['genres']), axis=1).stack().reset_index(level=1,drop=True)  
+# tworzymy nowy obiekt typu Series zawierający wyłącznie 'genres' zawierające gatunek filmu i jego id.
 # !!! muszę ją w wolnej chwili dokładnie zinterpretować
 # po co wyciagamy wszytskie agtunki filmów? Rozmiar (91106, ). Aby później je z joinować z obiektem 'filmy_dane'?
 
 gatunek_filmu.name = 'kategoria'
 # zmiany nazwy kolumny tabeli 'gatunek_filmu' z '0' na 'kategoria'
 
-filmy_dane_bez_genres = filmy_dane.drop('genres', axis=1).join(gatunek_filmu) 
-# Obiekt DataFrame 'filmy_dane_bez_genres' już nie ma skomplikowanej kolumny 'genres'.
-# W zamian ma dodaną kolumnę 'kategoria'.
+filmy_dane_kategoria = filmy_dane.drop('genres', axis=1).join(gatunek_filmu) 
+# Obiekt DataFrame 'filmy_dane_bez_genres' już nie ma skomplikowanej kolumny 'genres'. Nie wiem co miałem na mysli.
+# Utworzono obiekt DataFrame filmy_dane_kategoria, który ma na końcu dodaną kolumne 'kategoria'.
+# Obiekt nie różni się niczym od obiektu 'filmy_dane' więc po co on jest?
 
-def buduj_wykres(kategoria, percentile=0.867):  ## zmiana z 0.85 na 0.80
-    df = filmy_dane_bez_genres[filmy_dane_bez_genres['belongs_to_collection'] == kategoria]
+def buduj_wykres(kategoria, percentile=0.867):
+    df = filmy_dane_kategoria[filmy_dane_kategoria['belongs_to_collection'] == kategoria]
     liczba_glosow = df[df['vote_count'].notnull()]['vote_count'].astype('int')
     srednia_glosow = df[df['vote_average'].notnull()]['vote_average'].astype('int')
     srednia_ze_sredniej_liczby_glosow = srednia_glosow.mean()
@@ -105,13 +107,15 @@ def buduj_wykres(kategoria, percentile=0.867):  ## zmiana z 0.85 na 0.80
     zakwalifikowany['vote_average'] = zakwalifikowany['vote_average'].astype('int')
 
     zakwalifikowany['ocena_wazona'] = zakwalifikowany.apply(lambda x: (x['vote_count'] / (x['vote_count'] + liczba_glosow_kwantyl) * x['vote_average']) + (liczba_glosow_kwantyl / (liczba_glosow_kwantyl + x['vote_count']) * srednia_ze_sredniej_liczby_glosow), axis=1)
-    zakwalifikowany = zakwalifikowany.sort_values('ocena_wazona', ascending=False).head(250)
+    zakwalifikowany = zakwalifikowany.sort_values('ocena_wazona', ascending=False).head(500)
 
-    return
+    return zakwalifikowany
 # !!! muszę ją w wolnej chwili dokładnie zinterpretować
 
+# buduj_wykres('Romance').head(15)
+
 dane_id = pd.read_csv(r'C:/Users/Adam/Desktop/netflix_dane_edit/dane_id_male.csv')  
-# wczytanie danych o: id_film, id_imdb, id_tmdb.
+# wczytanie danych o: id_film, id_imdb, id_tmdb (9125 3).
 
 dane_id = dane_id[dane_id['tmdbId'].notnull()]['tmdbId'].astype('int')  
 # pozostawienie tylko kolumny 'tmdbId' w tabeli 'dane_id'.
@@ -135,7 +139,8 @@ filmy_dane_join_dane_id['tagline'] = filmy_dane_join_dane_id['tagline'].fillna('
 # Dzięki funkcji 'fillna('')' zastępujemy wartosci nan w kolumnie 'tagline', pustym polem.
 
 filmy_dane_join_dane_id['description'] = filmy_dane_join_dane_id['overview'] + filmy_dane_join_dane_id['tagline']  
-# !!! musze to sprawdzić
+# dodanie do obiektu dataframe kolummny 'description' 
+# po co 'overievw' i 'tagline'?
 
 filmy_dane_join_dane_id['description'] = filmy_dane_join_dane_id['description'].fillna('')  
 # Dzięki funkcji 'fillna('')' zastępujemy wartosci nan w kolumnie 'description', pustym polem.
@@ -145,7 +150,7 @@ wektoryzator_tfId = TfidfVectorizer(analyzer='word', ngram_range=(1, 2), min_df=
 # ale także od tego, jak powtarzający się termin występuje 
 
 tfidf_macierz = wektoryzator_tfId.fit_transform(filmy_dane_join_dane_id['description'])  
-# !!! trenowanie?
+# Dopasuj do danych, a następnie przekształć je.
 
 tfidf_macierz.shape
 # !!! skąd ten rozmiar się wziął (9099, 268124)? Co tam jest przechowywane?
@@ -164,8 +169,8 @@ podobienstwo_cosinusowe[0]
 # !!! jak interpretować tą liste? 
 # Czy jest ta macierz terminów, w której każdy wiersz reprezentuje dokument,
 # a każda kolumna jest adresowana do tokenu?
-# Jest to macierz podobieństwa cosinusów parami dla wszystkich filmów w naszym zbiorze danych.
 
+# Mamy teraz macierz podobieństwa cosinusów parami dla wszystkich filmów w naszym zbiorze danych.
 # Następnym krokiem jest napisanie funkcji zwracającej 30 najbardziej podobnych filmów na podstawie
 # wyniku podobieństwa cosinusowego.
 
@@ -180,9 +185,11 @@ indeksy = pd.Series(filmy_dane_join_dane_id.index, index=filmy_dane_join_dane_id
 # !!! jak rozumiem, filmy_dane_join_dane_id.index nadał indeks tytłom wyciągniętym z kolumny 
 # 'filmy_dane_join_dane_id'? Po co?
 
-def uzyskane_rekomendacje(title):
-    idx = indeksy[title]
-    wynik_symulacji = list(enumerate(podobienstwo_cosinusowe[idx]))
+#indeksy.name = 'indeks'
+
+def uzyskane_rekomendacje(tytul):
+    indeks = indeksy[tytul]
+    wynik_symulacji = list(enumerate(podobienstwo_cosinusowe[indeks]))
     wynik_symulacji = sorted(wynik_symulacji, key=lambda x: x[1], reverse=True)
     wynik_symulacji = wynik_symulacji[1:31]
     indeksy_filmowe = [i[0] for i in wynik_symulacji]
@@ -210,33 +217,42 @@ filmy_dane = filmy_dane.merge(obsada, on='id')
 
 filmy_dane = filmy_dane.merge(slowa_kluczowe, on='id') 
 # Dodano do obiektu DataFrame 'filmy_dane kolumne 'keywords'.
-# filmy_dane ma łącznie 28 kolumn.
+# filmy_dane ma łącznie 28 kolumn (46540, 28), miało (45451, 27)
 
 filmy_dane_join_dane_id = filmy_dane[filmy_dane['id'].isin(dane_id)] 
-# dodanie kolumny index do obiektu DataFrame 'film_dane_join_dane_id'. Roz. (9219, 28).
+# dodanie kolumny id do obiektu DataFrame 'film_dane_join_dane_id'. Roz. (9219, 28), a było (9099, 27).
 
 # Mamy teraz obsadę, ekipę, gatunki i napisy końcowe w jednej tabeli 'filmy_dane_join_dane_id'. 
 # Będziemy teraz brali pod uwagę reżysera, oraz głóWnych bohaterów i idpowiadających im aktorów. 
-# Wybierzemy 3 najlepszych aktorów, którzy pojawią się na liście kredytów.
+# Wybierzemy 3 najlepszych aktorów, którzy pojawią się na liście.
 
 filmy_dane_join_dane_id['cast'] = filmy_dane_join_dane_id['cast'].apply(literal_eval) 
-# apply umożliwia użytkownikom przekazywanie funkcji.
-
+# apply umożliwia użytkownikom przekazywanie funkcji. !!! Co to robi?
 filmy_dane_join_dane_id['crew'] = filmy_dane_join_dane_id['crew'].apply(literal_eval) 
+# !!! Co to robi?
 filmy_dane_join_dane_id['keywords'] = filmy_dane_join_dane_id['keywords'].apply(literal_eval)
-
+# !!! Co to robi?
 
 filmy_dane_join_dane_id['cast_size'] = filmy_dane_join_dane_id['cast'].apply(lambda x: len(x)) 
+# dodanie kolumny 'cast_size'
 filmy_dane_join_dane_id['crew_size'] = filmy_dane_join_dane_id['crew'].apply(lambda x: len(x))
+# dodanie kolumny 'crew_size'.
 
 def otrzymanie_rezysera(x): 
     for i in x:
         if i['job'] == 'Director':
             return i['name']
     return np.nan
+# funkcja na otrzymanie reżysera
 
 filmy_dane_join_dane_id['Director'] = filmy_dane_join_dane_id['crew'].apply(otrzymanie_rezysera)
-#  użycie funkcji otrzymanie rezysera. 
+# użycie funkcji otrzymanie rezysera która wyciąga reżysera imie i nazwisko i dodaje jako nową kolumnę w 'filmy_dane_join_dane_id'
+
+
+
+##### TEGO NIE WCZYTYWAŁEM #####
+
+
 
 filmy_dane_join_dane_id['cast'] = filmy_dane_join_dane_id['cast'].apply(lambda x: [i['name'] for i in x] if isinstance(x, list) else []) 
 # !!! musze to dokładnie zinterpretować
@@ -262,6 +278,11 @@ filmy_dane_join_dane_id['Director'] = filmy_dane_join_dane_id['Director'].apply(
 
 gatunek_filmu = filmy_dane_join_dane_id.apply(lambda x: pd.Series(x['keywords']),axis=1).stack().reset_index(level=1, drop=True)
 # !!! musze to dokładnie zinterpretować. Liczba rekordów została zmniejszona z 91106 na 64407.
+
+
+
+##### DO TEGO MIEJSCA #####
+
 
 gatunek_filmu.name = 'keyword'
 # zmiana nazy kolumny z '0' na 'keywords'.
@@ -291,6 +312,9 @@ def filtr_slow_kluczowych(x): #
     return words
 # !!! musze to dokładnie zinterpretować.
 
+
+
+
 filmy_dane_join_dane_id['keywords'] = filmy_dane_join_dane_id['keywords'].apply(filtr_slow_kluczowych)
 # !!!
 
@@ -305,6 +329,11 @@ filmy_dane_join_dane_id['soup'] = filmy_dane_join_dane_id['keywords'] + filmy_da
 
 filmy_dane_join_dane_id['soup'] = filmy_dane_join_dane_id['soup'].apply(lambda x: ' '.join(x)) #
 # !!!
+
+
+
+
+
 
 zlicz = CountVectorizer(analyzer='word',ngram_range=(1, 2),min_df=0, stop_words='english') 
 # !!!!
@@ -333,27 +362,6 @@ czytelnik = Reader()
 
 oceny = pd.read_csv(r'C:/Users/Adam/Desktop/netflix_dane_edit/ratings_small.csv') 
 # wczytanie użytkownika, filmu i oceny.
-
-###############################################
-
-def oceny_testowe(oceny, test_ratio):
-    shuffled_indices = np.random.permutation(len(oceny))
-    test_set_size = int(len(oceny) * test_ratio)
-    test_indices = shuffled_indices[:test_set_size]
-    train_indices = shuffled_indices[test_set_size:]
-    return oceny.iloc[train_indices], oceny.iloc[test_indices]
-    
-train_oceny, test_oceny = train_test_split(oceny, test_size=0.2, random_state=42)
-
-outliers_fraction = 0.15
-estimator = IsolationForest(contamination=outliers_fraction,random_state=42)
-estimator.fit(oceny)
-
-recenzja = oceny
-kolumny = ['userId','movieId']
-recenzja = recenzja[kolumny]
-
-###############################################
 
 dane = Dataset.load_from_df(oceny[['userId', 'movieId', 'rating']], czytelnik)
 # !!! co to jest?
@@ -428,6 +436,7 @@ def hybryda(userId, title):
 
 hybryda(1, 'Avatar') # wygenerowanie danych w kodzie
 hybryda(500, 'Avatar') # wygenerowanie danych w kodzie
+
 
 
 # obejrzały 10 filmów i uznały czy rzeczywicie te filmy są dobre.
